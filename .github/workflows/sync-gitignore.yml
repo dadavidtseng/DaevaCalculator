@@ -5,72 +5,84 @@ permissions:
 
 on:
   workflow_dispatch:
-  
+
   schedule:
     # 每週一凌晨 2 點執行
     - cron: '0 2 * * 1'
 
 jobs:
-  sync-files:
+  sync-config-files:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Sync files
-        id: sync
+      - name: Download and sync config files
+        id: sync_files
         run: |
-          # 定義要同步的檔案清單和對應的來源檔案
-          declare -A FILES_MAP=(
-            [".gitignore"]="unreal-engine.gitignore"
-            [".gitattribute"]="unreal-engine.gitattribute"
-#            [".editorconfig"]=".editorconfig"
-#            [".gitattributes"]=".gitattributes"
-#            [".clang-format"]=".clang-format"
+          # 定義要同步的檔案清單
+          # 格式: "本地檔案名:遠端檔案名"
+          FILES=(
+            ".gitignore:unreal-engine.gitignore"
+            ".gitattributes:unreal-engine.gitattributes"
+#            ".editorconfig:.editorconfig"
+#            ".clang-format:.clang-format"
             # 在這裡加入更多檔案
           )
           
-          CHANGED_FILES=""
           BASE_URL="https://raw.githubusercontent.com/dadavidtseng/ConfigCommon/main"
+          CHANGED_FILES=""
+          ANY_CHANGED=false
           
-          for TARGET_FILE in "${!FILES_MAP[@]}"; do
-            SOURCE_FILE="${FILES_MAP[$TARGET_FILE]}"
-            echo "正在同步 $TARGET_FILE (來源: $SOURCE_FILE)"
-
+          # 處理每個檔案
+          for FILE_PAIR in "${FILES[@]}"; do
+            # 分割本地和遠端檔案名
+            IFS=':' read -r LOCAL_FILE REMOTE_FILE <<< "$FILE_PAIR"
+          
+            echo "Processing $LOCAL_FILE (from $REMOTE_FILE)"
+          
             # 下載檔案
-            if curl -fsSL "$BASE_URL/$SOURCE_FILE" -o "${TARGET_FILE}.temp" 2>/dev/null; then
-              if [ -s "${TARGET_FILE}.temp" ]; then
-                # 檢查是否有變更
-                if [ -f "$TARGET_FILE" ]; then
-                  if ! cmp -s "$TARGET_FILE" "${TARGET_FILE}.temp"; then
-                    mv "${TARGET_FILE}.temp" "$TARGET_FILE"
-                    CHANGED_FILES="${CHANGED_FILES}${TARGET_FILE} "
-                    echo "✅ $TARGET_FILE 已更新"
-                  else
-                    rm -f "${TARGET_FILE}.temp"
-                    echo "ℹ️ $TARGET_FILE 沒有變更"
-                  fi
-                else
-                  mv "${TARGET_FILE}.temp" "$TARGET_FILE"
-                  CHANGED_FILES="${CHANGED_FILES}${TARGET_FILE} "
-                  echo "✅ $TARGET_FILE 已建立"
-                fi
+            SUCCESS=false
+            if curl -fsSL "$BASE_URL/$REMOTE_FILE" -o "${LOCAL_FILE}.temp"; then
+              if [ -s "${LOCAL_FILE}.temp" ]; then
+                echo "Successfully downloaded $REMOTE_FILE"
+                SUCCESS=true
+              fi
+            fi
+          
+            if [ "$SUCCESS" = false ]; then
+              echo "Failed to download $REMOTE_FILE, skipping..."
+              rm -f "${LOCAL_FILE}.temp"
+              continue
+            fi
+          
+            # 檢查變更
+            if [ -f "$LOCAL_FILE" ]; then
+              if ! cmp -s "$LOCAL_FILE" "${LOCAL_FILE}.temp"; then
+                echo "Changes detected in $LOCAL_FILE"
+                mv "${LOCAL_FILE}.temp" "$LOCAL_FILE"
+                CHANGED_FILES="$CHANGED_FILES $LOCAL_FILE"
+                ANY_CHANGED=true
               else
-                echo "⚠️ 下載的檔案是空的: $SOURCE_FILE"
-                rm -f "${TARGET_FILE}.temp"
+                echo "No changes in $LOCAL_FILE"
+                rm -f "${LOCAL_FILE}.temp"
               fi
             else
-              echo "❌ 無法下載: $SOURCE_FILE"
+              echo "Creating new $LOCAL_FILE"
+              mv "${LOCAL_FILE}.temp" "$LOCAL_FILE"
+              CHANGED_FILES="$CHANGED_FILES $LOCAL_FILE"
+              ANY_CHANGED=true
             fi
           done
           
-          # 清理暫存檔案
-          rm -f *.temp 2>/dev/null || true
+          # 清理所有暫存檔案
+          rm -f *.temp
           
-          if [ -n "$CHANGED_FILES" ]; then
+          # 設定輸出
+          if [ "$ANY_CHANGED" = true ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
           else
@@ -78,22 +90,22 @@ jobs:
           fi
 
       - name: Commit and push
-        if: steps.sync.outputs.changed == 'true'
+        if: steps.sync_files.outputs.changed == 'true'
         run: |
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
           git add .
-          git commit -m "chore: sync config files from ConfigCommon
+          git commit -m "chore: update config files from ConfigCommon
           
-          Updated: ${{ steps.sync.outputs.changed_files }}"
+          Updated files:${{ steps.sync_files.outputs.changed_files }}"
           git push
 
       - name: Summary
         run: |
-          echo "## 同步結果" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.sync.outputs.changed }}" = "true" ]; then
-            echo "已更新: ${{ steps.sync.outputs.changed_files }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.sync_files.outputs.changed }}" = "true" ]; then
+            echo "Config files have been updated and committed"
+            echo "Updated files:${{ steps.sync_files.outputs.changed_files }}"
           else
-            echo "所有檔案都是最新的" >> $GITHUB_STEP_SUMMARY
+            echo "All config files are already up to date"
           fi
