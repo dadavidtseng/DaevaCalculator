@@ -1,22 +1,17 @@
-name: Sync .gitignore from ConfigCommon
+name: Sync Config Files from ConfigCommon
 
 permissions:
   contents: write
 
 on:
   workflow_dispatch:
-    inputs:
-      template_name:
-        description: 'Template file name'
-        required: false
-        default: 'unreal-engine.gitignore'
   
   schedule:
     # 每週一凌晨 2 點執行
     - cron: '0 2 * * 1'
 
 jobs:
-  sync-gitignore:
+  sync-files:
     runs-on: ubuntu-latest
     
     steps:
@@ -25,78 +20,80 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Download .gitignore template
+      - name: Sync files
+        id: sync
         run: |
-          TEMPLATE_NAME="${{ github.event.inputs.template_name || 'unreal-engine.gitignore' }}"
-          echo "Trying to download: $TEMPLATE_NAME"
-          
-          # Try multiple possible file names
-          URLS=(
-            "https://raw.githubusercontent.com/dadavidtseng/ConfigCommon/main/$TEMPLATE_NAME"
-            "https://raw.githubusercontent.com/dadavidtseng/ConfigCommon/main/.gitignore"
-            "https://raw.githubusercontent.com/dadavidtseng/ConfigCommon/main/unreal.gitignore"
+          # 定義要同步的檔案清單和對應的來源檔案
+          declare -A FILES_MAP=(
+            [".gitignore"]="unreal-engine.gitignore"
+            [".gitattribute"]="unreal-engine.gitattribute"
+#            [".editorconfig"]=".editorconfig"
+#            [".gitattributes"]=".gitattributes"
+#            [".clang-format"]=".clang-format"
+            # 在這裡加入更多檔案
           )
           
-          SUCCESS=false
-          for URL in "${URLS[@]}"; do
-            echo "Trying: $URL"
-            if curl -fsSL "$URL" -o .gitignore.temp; then
-              if [ -s .gitignore.temp ]; then
-                echo "Successfully downloaded from: $URL"
-                SUCCESS=true
-                break
+          CHANGED_FILES=""
+          BASE_URL="https://raw.githubusercontent.com/dadavidtseng/ConfigCommon/main"
+          
+          for TARGET_FILE in "${!FILES_MAP[@]}"; do
+            SOURCE_FILE="${FILES_MAP[$TARGET_FILE]}"
+            echo "正在同步 $TARGET_FILE (來源: $SOURCE_FILE)"
+            
+            # 下載檔案
+            if curl -fsSL "$BASE_URL/$SOURCE_FILE" -o "${TARGET_FILE}.temp" 2>/dev/null; then
+              if [ -s "${TARGET_FILE}.temp" ]; then
+                # 檢查是否有變更
+                if [ -f "$TARGET_FILE" ]; then
+                  if ! cmp -s "$TARGET_FILE" "${TARGET_FILE}.temp"; then
+                    mv "${TARGET_FILE}.temp" "$TARGET_FILE"
+                    CHANGED_FILES="${CHANGED_FILES}${TARGET_FILE} "
+                    echo "✅ $TARGET_FILE 已更新"
+                  else
+                    rm -f "${TARGET_FILE}.temp"
+                    echo "ℹ️ $TARGET_FILE 沒有變更"
+                  fi
+                else
+                  mv "${TARGET_FILE}.temp" "$TARGET_FILE"
+                  CHANGED_FILES="${CHANGED_FILES}${TARGET_FILE} "
+                  echo "✅ $TARGET_FILE 已建立"
+                fi
+              else
+                echo "⚠️ 下載的檔案是空的: $SOURCE_FILE"
+                rm -f "${TARGET_FILE}.temp"
               fi
+            else
+              echo "❌ 無法下載: $SOURCE_FILE"
             fi
-            rm -f .gitignore.temp
           done
           
-          if [ "$SUCCESS" = false ]; then
-            echo "Failed to download any .gitignore template"
-            exit 1
-          fi
+          # 清理暫存檔案
+          rm -f *.temp 2>/dev/null || true
           
-          echo "Downloaded file size: $(wc -l < .gitignore.temp) lines"
-      
-      - name: Check for changes
-        id: check
-        run: |
-          if [ -f .gitignore ]; then
-            if cmp -s .gitignore .gitignore.temp; then
-              echo "No changes detected"
-              echo "changed=false" >> $GITHUB_OUTPUT
-            else
-              echo "Changes detected"
-              echo "changed=true" >> $GITHUB_OUTPUT
-            fi
-          else
-            echo "No existing .gitignore, creating new one"
+          if [ -n "$CHANGED_FILES" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
+            echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
           fi
-      
-      - name: Update .gitignore
-        if: steps.check.outputs.changed == 'true'
-        run: |
-          mv .gitignore.temp .gitignore
-          echo ".gitignore updated successfully"
-      
-      - name: Clean up
-        run: |
-          rm -f .gitignore.temp
       
       - name: Commit and push
-        if: steps.check.outputs.changed == 'true'
+        if: steps.sync.outputs.changed == 'true'
         run: |
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
-          git add .gitignore
-          git commit -m "chore: update .gitignore from ConfigCommon"
+          git add .
+          git commit -m "chore: sync config files from ConfigCommon
+          
+          Updated: ${{ steps.sync.outputs.changed_files }}"
           git push
       
       - name: Summary
         run: |
-          if [ "${{ steps.check.outputs.changed }}" = "true" ]; then
-            echo ".gitignore has been updated and committed"
+          echo "## 同步結果" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.sync.outputs.changed }}" = "true" ]; then
+            echo "已更新: ${{ steps.sync.outputs.changed_files }}" >> $GITHUB_STEP_SUMMARY
           else
-            echo ".gitignore is already up to date"
+            echo "所有檔案都是最新的" >> $GITHUB_STEP_SUMMARY
           fi
