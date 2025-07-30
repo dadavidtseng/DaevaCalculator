@@ -1,55 +1,106 @@
-$simpleWorkflow = @'
-name: Manual Sync .gitignore
+name: Sync .gitignore from ConfigCommon
 
 permissions:
   contents: write
 
 on:
   workflow_dispatch:
+    inputs:
+      template_name:
+        description: 'Template file name'
+        required: false
+        default: 'unreal-engine.gitignore'
+  
+  schedule:
+    - cron: '0 2 * * 1'
 
 jobs:
-  sync:
+  sync-gitignore:
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Download .gitignore
+      - name: Download .gitignore template
         run: |
-          # 嘗試下載檔案
-          if curl -fsSL "https://raw.githubusercontent.com/dadavidtseng/ConfigCommon/main/unreal-engine.gitignore" -o .gitignore.new; then
-            echo "Downloaded unreal-engine.gitignore"
-          elif curl -fsSL "https://raw.githubusercontent.com/dadavidtseng/ConfigCommon/main/.gitignore" -o .gitignore.new; then
-            echo "Downloaded .gitignore"
-          else
-            echo "Failed to download any .gitignore file"
+          TEMPLATE_NAME="${{ github.event.inputs.template_name || 'unreal-engine.gitignore' }}"
+          echo "Trying to download: $TEMPLATE_NAME"
+          
+          # Try multiple possible file names
+          URLS=(
+            "https://raw.githubusercontent.com/dadavidtseng/ConfigCommon/main/$TEMPLATE_NAME"
+            "https://raw.githubusercontent.com/dadavidtseng/ConfigCommon/main/.gitignore"
+            "https://raw.githubusercontent.com/dadavidtseng/ConfigCommon/main/unreal.gitignore"
+          )
+          
+          SUCCESS=false
+          for URL in "${URLS[@]}"; do
+            echo "Trying: $URL"
+            if curl -fsSL "$URL" -o .gitignore.temp; then
+              if [ -s .gitignore.temp ]; then
+                echo "✅ Successfully downloaded from: $URL"
+                SUCCESS=true
+                break
+              fi
+            fi
+            rm -f .gitignore.temp
+          done
+          
+          if [ "$SUCCESS" = false ]; then
+            echo "❌ Failed to download any .gitignore template"
             exit 1
           fi
           
-          # 檢查檔案
-          if [ -s .gitignore.new ]; then
-            mv .gitignore.new .gitignore
-            echo "✅ Successfully updated .gitignore"
+          echo "Downloaded file size: $(wc -l < .gitignore.temp) lines"
+      
+      - name: Check for changes
+        id: check
+        run: |
+          if [ -f .gitignore ]; then
+            if cmp -s .gitignore .gitignore.temp; then
+              echo "No changes detected"
+              echo "changed=false" >> $GITHUB_OUTPUT
+            else
+              echo "Changes detected"
+              echo "changed=true" >> $GITHUB_OUTPUT
+            fi
           else
-            echo "❌ Downloaded file is empty"
-            exit 1
+            echo "No existing .gitignore, creating new one"
+            echo "changed=true" >> $GITHUB_OUTPUT
           fi
       
-      - name: Commit changes
+      - name: Update .gitignore
+        if: steps.check.outputs.changed == 'true'
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          mv .gitignore.temp .gitignore
+          echo "✅ .gitignore updated successfully"
+      
+      - name: Clean up
+        run: |
+          rm -f .gitignore.temp
+      
+      - name: Commit and push
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
           
-          if git diff --quiet; then
-            echo "No changes to commit"
+          git add .gitignore
+          git commit -m "chore: update .gitignore from ConfigCommon
+
+Source: https://github.com/dadavidtseng/ConfigCommon
+Updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+Triggered by: ${{ github.event_name }}"
+          
+          git push
+      
+      - name: Summary
+        run: |
+          if [ "${{ steps.check.outputs.changed }}" = "true" ]; then
+            echo "✅ .gitignore has been updated and committed"
           else
-            git add .gitignore
-            git commit -m "Update .gitignore from ConfigCommon"
-            git push
-            echo "✅ Changes committed and pushed"
+            echo "ℹ️ .gitignore is already up to date"
           fi
-'@
-
-# 建立簡化版 workflow
-$simpleWorkflow | Out-File -FilePath .github\workflows\simple-sync.yml -Encoding UTF8
-
-Write-Host "✅ 建立簡化版 workflow"
