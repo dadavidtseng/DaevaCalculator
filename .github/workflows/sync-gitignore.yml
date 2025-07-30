@@ -41,7 +41,7 @@ jobs:
             echo "Trying: $URL"
             if curl -fsSL "$URL" -o .gitignore.temp; then
               if [ -s .gitignore.temp ]; then
-                echo "✅ Successfully downloaded from: $URL"
+                echo "Successfully downloaded from: $URL"
                 SUCCESS=true
                 break
               fi
@@ -50,7 +50,7 @@ jobs:
           done
           
           if [ "$SUCCESS" = false ]; then
-            echo "❌ Failed to download any .gitignore template"
+            echo "Failed to download any .gitignore template"
             exit 1
           fi
           
@@ -76,7 +76,7 @@ jobs:
         if: steps.check.outputs.changed == 'true'
         run: |
           mv .gitignore.temp .gitignore
-          echo "✅ .gitignore updated successfully"
+          echo ".gitignore updated successfully"
       
       - name: Clean up
         run: |
@@ -100,7 +100,7 @@ Triggered by: ${{ github.event_name }}"
       - name: Summary
         run: |
           if [ "${{ steps.check.outputs.changed }}" = "true" ]; then
-            echo "✅ .gitignore has been updated and committed"
+            echo ".gitignore has been updated and committed"
           else
-            echo "ℹ️ .gitignore is already up to date"
+            echo ".gitignore is already up to date"
           fi
