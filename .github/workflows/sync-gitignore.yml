@@ -1,4 +1,5 @@
-@"
+# 建立正確的 workflow 檔案
+$workflowContent = @'
 name: Sync .gitignore from ConfigCommon
 
 permissions:
@@ -24,28 +25,28 @@ jobs:
       - name: Checkout current repository
         uses: actions/checkout@v4
         with:
-          token: `${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Set template name
         run: |
-          TEMPLATE_NAME="`${{ github.event.inputs.template_name || 'unreal-engine.gitignore' }}"
-          echo "TEMPLATE_NAME=`$TEMPLATE_NAME" >> `$GITHUB_ENV
-          echo "Using template: `$TEMPLATE_NAME"
+          TEMPLATE_NAME="${{ github.event.inputs.template_name || 'unreal-engine.gitignore' }}"
+          echo "TEMPLATE_NAME=$TEMPLATE_NAME" >> $GITHUB_ENV
+          echo "Using template: $TEMPLATE_NAME"
       
       - name: Download .gitignore template
         run: |
-          echo "Downloading template: `$TEMPLATE_NAME"
+          echo "Downloading template: $TEMPLATE_NAME"
           
           # 建立 URL
-          URL="https://raw.githubusercontent.com/dadavidtseng/ConfigCommon/main/`$TEMPLATE_NAME"
-          echo "URL: `$URL"
+          URL="https://raw.githubusercontent.com/dadavidtseng/ConfigCommon/main/$TEMPLATE_NAME"
+          echo "URL: $URL"
           
           # 下載檔案並檢查狀態碼
-          HTTP_CODE=`$(curl -w "%{http_code}" -fsSL "`$URL" -o .gitignore.new)
+          HTTP_CODE=$(curl -w "%{http_code}" -fsSL "$URL" -o .gitignore.new)
           
-          if [ "`$HTTP_CODE" != "200" ]; then
-            echo "Error: HTTP `$HTTP_CODE when downloading `$TEMPLATE_NAME"
-            echo "URL: `$URL"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Error: HTTP $HTTP_CODE when downloading $TEMPLATE_NAME"
+            echo "URL: $URL"
             exit 1
           fi
           
@@ -55,7 +56,7 @@ jobs:
             exit 1
           fi
           
-          echo "Successfully downloaded `$TEMPLATE_NAME (`$(wc -l < .gitignore.new) lines)"
+          echo "Successfully downloaded $TEMPLATE_NAME ($(wc -l < .gitignore.new) lines)"
           echo "First few lines:"
           head -5 .gitignore.new
       
@@ -65,16 +66,16 @@ jobs:
           if [ -f .gitignore ]; then
             if cmp -s .gitignore .gitignore.new; then
               echo "No changes detected"
-              echo "has_changes=false" >> `$GITHUB_OUTPUT
+              echo "has_changes=false" >> $GITHUB_OUTPUT
             else
               echo "Changes detected"
-              echo "has_changes=true" >> `$GITHUB_OUTPUT
+              echo "has_changes=true" >> $GITHUB_OUTPUT
               echo "Differences:"
               diff .gitignore .gitignore.new || true
             fi
           else
             echo "No existing .gitignore, creating new one"
-            echo "has_changes=true" >> `$GITHUB_OUTPUT
+            echo "has_changes=true" >> $GITHUB_OUTPUT
           fi
       
       - name: Update .gitignore
@@ -82,7 +83,7 @@ jobs:
         run: |
           mv .gitignore.new .gitignore
           echo "Updated .gitignore"
-          echo "Final file size: `$(wc -l < .gitignore) lines"
+          echo "Final file size: $(wc -l < .gitignore) lines"
       
       - name: Clean up temporary files
         run: |
@@ -97,17 +98,25 @@ jobs:
           git add .gitignore
           git commit -m "chore: update .gitignore from ConfigCommon template
 
-Source: https://github.com/dadavidtseng/ConfigCommon/blob/main/`$TEMPLATE_NAME
-Updated: `$(date -u '+%Y-%m-%d %H:%M:%S UTC')
-Triggered by: `${{ github.event_name }}"
+Source: https://github.com/dadavidtseng/ConfigCommon/blob/main/$TEMPLATE_NAME
+Updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+Triggered by: ${{ github.event_name }}"
           
           git push
       
       - name: Summary
         run: |
-          if [ "`${{ steps.check_changes.outputs.has_changes }}" == "true" ]; then
+          if [ "${{ steps.check_changes.outputs.has_changes }}" == "true" ]; then
             echo "✅ .gitignore updated successfully"
           else
             echo "ℹ️ No changes needed - .gitignore is already up to date"
           fi
-"@ | Out-File -FilePath .github\workflows\sync-gitignore.yml -Encoding UTF8
+'@
+
+# 確保目錄存在
+mkdir .github\workflows -Force
+
+# 寫入檔案
+$workflowContent | Out-File -FilePath .github\workflows\sync-gitignore.yml -Encoding UTF8
+
+Write-Host "✅ Workflow 檔案已更新"
