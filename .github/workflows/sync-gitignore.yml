@@ -12,6 +12,7 @@ on:
         default: 'unreal-engine.gitignore'
   
   schedule:
+    # 每週一凌晨 2 點執行
     - cron: '0 2 * * 1'
 
 jobs:
