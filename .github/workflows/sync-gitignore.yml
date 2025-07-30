@@ -89,12 +89,7 @@ jobs:
           git config --local user.name "github-actions[bot]"
           
           git add .gitignore
-          git commit -m "chore: update .gitignore from ConfigCommon
-
-Source: https://github.com/dadavidtseng/ConfigCommon
-Updated: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
-Triggered by: ${{ github.event_name }}"
-          
+          git commit -m "chore: update .gitignore from ConfigCommon"
           git push
       
       - name: Summary
