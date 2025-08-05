@@ -3,14 +3,14 @@
 using UnrealBuildTool;
 using System.Collections.Generic;
 
-public class FooCppTarget : TargetRules
+public class DaevaCalculatorTarget : TargetRules
 {
-	public FooCppTarget(TargetInfo Target) : base(Target)
+	public DaevaCalculatorTarget(TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Game;
 		DefaultBuildSettings = BuildSettingsVersion.V5;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_6;
-		ExtraModuleNames.Add("FooCpp");
+		ExtraModuleNames.Add("DaevaCalculator");
 		RegisterModulesCreatedByRider();
 	}
 

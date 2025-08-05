@@ -1,5 +1,5 @@
 //----------------------------------------------------------------------------------------------------
-// FooCpp.Build.cs
+// DaevaCalculator.Build.cs
 //----------------------------------------------------------------------------------------------------
 
 //----------------------------------------------------------------------------------------------------
@@ -7,9 +7,9 @@
 using UnrealBuildTool;
 
 //----------------------------------------------------------------------------------------------------
-public class FooCpp : ModuleRules
+public class DaevaCalculator : ModuleRules
 {
-	public FooCpp(ReadOnlyTargetRules Target) : base(Target)
+	public DaevaCalculator(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 

@@ -1,11 +1,11 @@
 //----------------------------------------------------------------------------------------------------
-// FooCpp.cpp
+// DaevaCalculator.cpp
 //----------------------------------------------------------------------------------------------------
 
 //----------------------------------------------------------------------------------------------------
-#include "FooCpp/FooCpp.h"
+#include "DaevaCalculator/DaevaCalculator.h"
 
 #include "Modules/ModuleManager.h"
 
 //----------------------------------------------------------------------------------------------------
-IMPLEMENT_PRIMARY_GAME_MODULE(FDefaultGameModuleImpl, FooCpp, "FooCpp");
+IMPLEMENT_PRIMARY_GAME_MODULE(FDefaultGameModuleImpl, DaevaCalculator, "DaevaCalculator");
